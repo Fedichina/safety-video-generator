@@ -3,3 +3,4 @@ edge-tts
 moviepy
 requests
 gunicorn
+gradio_client
