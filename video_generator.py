@@ -51,6 +51,16 @@ async def _make_narration(text: str, out_path: str, voice: str):
     await edge_tts.Communicate(text, voice).save(out_path)
 
 
+async def _make_narration_with_timeout(text: str, out_path: str, voice: str, timeout: float = 30.0):
+    try:
+        await asyncio.wait_for(_make_narration(text, out_path, voice), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f"Narration generation timed out after {timeout}s — "
+            "the text-to-speech service may be slow or unreachable right now."
+        )
+
+
 def _mp3_to_wav(mp3_path: str, wav_path: str):
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp3_path, "-ar", "44100", "-ac", "2", wav_path],
