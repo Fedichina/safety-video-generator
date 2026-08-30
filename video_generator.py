@@ -2,9 +2,25 @@
 video_generator.py
 -------------------
 Core text -> narrated safety video pipeline, reused by the Flask web app.
+
+Free/cheap tools used:
+  - edge-tts   : free neural narration
+  - Pexels API : free stock video search (needs a free API key)
+  - moviepy    : free, open-source video assembly
+
+Memory strategy: each scene is rendered to its own small mp4 file and
+released from memory immediately, rather than holding every scene's
+clip objects in RAM until the end. This matters a lot on constrained
+hosts (e.g. Render's free 512MB tier) where holding several decoded
+video clips at once can exceed available memory and get the process
+killed partway through. The finished per-scene files are joined at
+the end using ffmpeg's concat demuxer, which is a fast stream copy
+(no re-encoding, negligible memory use) since every scene shares the
+same codec/resolution/fps.
 """
 
 import asyncio
+import gc
 import os
 import subprocess
 import tempfile
@@ -15,7 +31,7 @@ from moviepy import (
     ColorClip, concatenate_videoclips
 )
 
-VIDEO_SIZE = (1080, 1920)
+VIDEO_SIZE = (1080, 1920)  # vertical 9:16, for Shorts/Reels/TikTok
 FONT_SIZE = 58
 
 
@@ -34,8 +50,8 @@ def fetch_stock_clip(query: str, out_path: str, api_key: str) -> bool:
         if not videos:
             return False
         files = sorted(videos[0]["video_files"], key=lambda f: f.get("width", 0))
-        candidates = [f for f in files if 640 <= f.get("width", 0) <= 1920] or files
-        video_url = candidates[-1]["link"]
+        candidates = [f for f in files if 480 <= f.get("width", 0) <= 720] or files
+        video_url = candidates[0]["link"]
 
         with requests.get(video_url, stream=True, timeout=30) as r:
             r.raise_for_status()
@@ -70,10 +86,12 @@ def _mp3_to_wav(mp3_path: str, wav_path: str):
     )
 
 
-def build_scene(text: str, index: int, tmpdir: str, api_key: str, voice: str):
+def render_scene_to_file(text: str, index: int, tmpdir: str, api_key: str, voice: str) -> str:
+    """Build one scene and immediately encode it to its own small mp4 file,
+    then release all the in-memory clip objects before returning."""
     mp3_path = os.path.join(tmpdir, f"audio_{index}.mp3")
     wav_path = os.path.join(tmpdir, f"audio_{index}.wav")
-    asyncio.run(_make_narration(text, mp3_path, voice))
+    asyncio.run(_make_narration_with_timeout(text, mp3_path, voice))
     _mp3_to_wav(mp3_path, wav_path)
 
     audio_clip = AudioFileClip(wav_path)
@@ -83,14 +101,19 @@ def build_scene(text: str, index: int, tmpdir: str, api_key: str, voice: str):
     keyword = text.split(",")[0][:40]
     got_stock = fetch_stock_clip(keyword or "workplace safety", video_path, api_key)
 
+    bg = None
     if got_stock:
-        bg = VideoFileClip(video_path).resized(height=VIDEO_SIZE[1])
-        bg = bg.cropped(x_center=bg.w / 2, width=VIDEO_SIZE[0])
-        if bg.duration < duration:
-            n_loops = int(duration // bg.duration) + 1
-            bg = concatenate_videoclips([bg] * n_loops)
-        bg = bg.subclipped(0, duration)
-    else:
+        try:
+            bg = VideoFileClip(video_path).resized(height=VIDEO_SIZE[1])
+            bg = bg.cropped(x_center=bg.w / 2, width=VIDEO_SIZE[0])
+            if bg.duration < duration:
+                n_loops = int(duration // bg.duration) + 1
+                bg = concatenate_videoclips([bg] * n_loops)
+            bg = bg.subclipped(0, duration)
+        except Exception:
+            bg = None
+
+    if bg is None:
         bg = ColorClip(size=VIDEO_SIZE, color=(20, 30, 40), duration=duration)
 
     caption = (
@@ -108,7 +131,30 @@ def build_scene(text: str, index: int, tmpdir: str, api_key: str, voice: str):
     )
 
     scene = CompositeVideoClip([bg, caption], size=VIDEO_SIZE).with_audio(audio_clip)
-    return scene.with_duration(duration)
+    scene = scene.with_duration(duration)
+
+    scene_output_path = os.path.join(tmpdir, f"scene_{index}.mp4")
+    scene.write_videofile(
+        scene_output_path, fps=24, codec="libx264", audio_codec="aac",
+        preset="ultrafast", threads=1, logger=None,
+    )
+
+    try:
+        scene.close()
+    except Exception:
+        pass
+    try:
+        audio_clip.close()
+    except Exception:
+        pass
+    try:
+        bg.close()
+    except Exception:
+        pass
+    del scene, audio_clip, bg, caption
+    gc.collect()
+
+    return scene_output_path
 
 
 def generate_video(script_text: str, output_path: str, api_key: str = "",
@@ -122,15 +168,25 @@ def generate_video(script_text: str, output_path: str, api_key: str = "",
         raise ValueError("No scenes found — please enter at least one line of text.")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        clips = []
+        scene_files = []
         for i, line in enumerate(lines):
             report(f"Generating scene {i + 1} of {len(lines)}: \"{line[:60]}\"")
-            clips.append(build_scene(line, i, tmpdir, api_key, voice))
+            scene_path = render_scene_to_file(line, i, tmpdir, api_key, voice)
+            scene_files.append(scene_path)
 
         report("Assembling final video...")
-        final = concatenate_videoclips(clips, method="compose")
-        final.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac",
-                               preset="ultrafast", threads=4, logger=None)
+        concat_list_path = os.path.join(tmpdir, "concat_list.txt")
+        with open(concat_list_path, "w") as f:
+            for sp in scene_files:
+                f.write(f"file '{sp}'\n")
+
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_list_path,
+             "-c", "copy", output_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         report("Done!")
 
     return output_path
