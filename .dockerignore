@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+generated/*.mp4
+.git
+.gitignore
+*.log
+.DS_Store
