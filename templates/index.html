@@ -1,1 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site&nbsp;Reel — Safety Video Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
+  :root {
+    --charcoal: #1c1e1f;
+    --charcoal-light: #26292a;
+    --panel: #232627;
+    --hazard: #f5b700;
+    --hazard-dim: #7a5c00;
+    --off-white: #f2f0ea;
+    --muted: #8d9294;
+    --line: #3a3d3e;
+    --alert: #d64933;
+    --ok: #5fb87a;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--charcoal);
+    color: var(--off-white);
+    font-family: 'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .hazard-bar {
+    height: 10px;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--hazard),
+      var(--hazard) 14px,
+      var(--charcoal) 14px,
+      var(--charcoal) 28px
+    );
+  }
+
+  header {
+    padding: 48px 32px 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    color: var(--hazard);
+    text-transform: uppercase;
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: clamp(36px, 5vw, 56px);
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+    line-height: 1.02;
+  }
+
+  header p.sub {
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 560px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 8px 32px 80px;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 28px;
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .card-head .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .card-head .num {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    color: var(--hazard);
+    font-size: 14px;
+  }
+
+  .card-body { padding: 20px; }
+
+  label {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 18px 0 8px;
+  }
+  label:first-child { margin-top: 0; }
+
+  textarea, select, input[type=text] {
+    width: 100%;
+    background: var(--charcoal-light);
+    border: 1px solid var(--line);
+    color: var(--off-white);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14.5px;
+    padding: 12px 14px;
+    border-radius: 2px;
+    resize: vertical;
+    line-height: 1.55;
+  }
+  textarea { min-height: 220px; }
+  textarea:focus, select:focus, input:focus {
+    outline: none;
+    border-color: var(--hazard);
+  }
+
+  .hint {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .hint a { color: var(--hazard); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+
+  button#generate-btn {
+    margin-top: 24px;
+    width: 100%;
+    background: var(--hazard);
+    color: var(--charcoal);
+    border: none;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 15px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  button#generate-btn:hover { background: #ffc933; }
+  button#generate-btn:active { transform: translateY(1px); }
+  button#generate-btn:disabled {
+    background: var(--hazard-dim);
+    color: #b8ab74;
+    cursor: not-allowed;
+  }
+
+  #status-panel .card-body { padding: 0; min-height: 220px; }
+
+  .empty-state {
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .empty-state .icon {
+    font-family: 'Oswald', sans-serif;
+    font-size: 40px;
+    color: var(--line);
+    margin-bottom: 10px;
+  }
+  .empty-state p { font-size: 13.5px; line-height: 1.6; margin: 0; }
+
+  #checklist { list-style: none; margin: 0; padding: 0; }
+  #checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  #checklist li:last-child { border-bottom: none; }
+
+  .box {
+    flex: 0 0 16px;
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--muted);
+    border-radius: 2px;
+    margin-top: 1px;
+    position: relative;
+  }
+  .box.checked { border-color: var(--ok); background: var(--ok); }
+  .box.checked::after {
+    content: "";
+    position: absolute;
+    left: 3px; top: -1px;
+    width: 4px; height: 8px;
+    border: solid var(--charcoal);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .box.active {
+    border-color: var(--hazard);
+    animation: pulse 1s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .log-line { color: var(--off-white); }
+  .log-line.dim { color: var(--muted); }
+
+  #result-area { padding: 20px; }
+  #result-area video {
+    width: 100%;
+    max-width: 320px;
+    display: block;
+    margin: 0 auto 16px;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+  }
+  a.download-btn {
+    display: inline-block;
+    background: transparent;
+    border: 1.5px solid var(--hazard);
+    color: var(--hazard);
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 11px 20px;
+    border-radius: 2px;
+    text-decoration: none;
+  }
+  a.download-btn:hover { background: var(--hazard); color: var(--charcoal); }
+
+  .error-box {
+    margin: 20px;
+    padding: 14px 16px;
+    border: 1px solid var(--alert);
+    background: rgba(214, 73, 51, 0.08);
+    color: #f0a998;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    border-radius: 2px;
+  }
+
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 32px 40px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+  <div class="hazard-bar"></div>
+
+  <header>
+    <p class="eyebrow">// Text-to-video, no subscription required</p>
+    <h1>Site Reel</h1>
+    <p class="sub">Paste a safety script, one line per scene. Get back a narrated, captioned video built from free stock footage and neural voiceover.</p>
+  </header>
+
+  <main>
+    <section class="card" id="form-card">
+      <div class="card-head">
+        <span class="tag">Script Input</span>
+        <span class="num">01</span>
+      </div>
+      <div class="card-body">
+        <form id="video-form">
+          <label for="script">Scene script — one sentence per line</label>
+          <textarea id="script" name="script" placeholder="Always wear your hard hat and safety glasses on site.&#10;Never operate machinery without proper training.&#10;Keep walkways clear of tripping hazards."></textarea>
+          <p class="hint">Each line becomes one narrated scene with matching footage. Optionally add "| search keywords" after a line to control what footage gets searched for, independent of the caption text.</p>
+
+          <label for="voice">Narrator voice</label>
+          <select id="voice" name="voice">
+            {% for id, label in voices.items() %}
+            <option value="{{ id }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="api_key">Pexels API key <span style="text-transform:none;">(optional)</span></label>
+          <input type="text" id="api_key" name="api_key" placeholder="Paste your key here, e.g. 563492ad6f9...">
+          <p class="hint">Free key from <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a> — enables real stock footage matched to each scene. Saved in this browser only, so you won't need to paste it again.</p>
+
+          <button type="submit" id="generate-btn">Generate video</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card" id="status-panel">
+      <div class="card-head">
+        <span class="tag">Production Log</span>
+        <span class="num">02</span>
+      </div>
+      <div class="card-body">
+        <div class="empty-state" id="empty-state">
+          <div class="icon">—</div>
+          <p>Submit a script to start production.<br>Scene status will appear here.</p>
+        </div>
+        <ul id="checklist" style="display:none;"></ul>
+        <div id="result-area" style="display:none;"></div>
+        <div id="error-area" style="display:none;"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Site Reel — runs on Render. No data leaves this server except calls to edge-tts and Pexels.</footer>
+
+<script>
+const form = document.getElementById('video-form');
+const btn = document.getElementById('generate-btn');
+const emptyState = document.getElementById('empty-state');
+const checklist = document.getElementById('checklist');
+const resultArea = document.getElementById('result-area');
+const errorArea = document.getElementById('error-area');
+const apiKeyInput = document.getElementById('api_key');
+
+const savedApiKey = localStorage.getItem('site_reel_pexels_key');
+if (savedApiKey) {
+  apiKeyInput.value = savedApiKey;
+}
+apiKeyInput.addEventListener('input', () => {
+  localStorage.setItem('site_reel_pexels_key', apiKeyInput.value.trim());
+});
+
+let pollTimer = null;
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const scriptText = document.getElementById('script').value.trim();
+  if (!scriptText) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  emptyState.style.display = 'none';
+  resultArea.style.display = 'none';
+  errorArea.style.display = 'none';
+  checklist.style.display = 'block';
+
+  const lines = scriptText.split('\n').map(l => l.trim()).filter(Boolean);
+  checklist.innerHTML = lines.map((line, i) =>
+    `<li id="scene-${i}"><span class="box"></span><span class="log-line dim">Scene ${i+1}: ${escapeHtml(line.slice(0,70))}</span></li>`
+  ).join('') + `<li id="scene-final"><span class="box"></span><span class="log-line dim">Assembling final video…</span></li>`;
+
+  const fd = new FormData(form);
+  const resp = await fetch('/generate', { method: 'POST', body: fd });
+  const data = await resp.json();
+
+  if (data.error) {
+    showError(data.error);
+    return;
+  }
+
+  poll(data.job_id, lines.length);
+});
+
+function poll(jobId, sceneCount) {
+  pollTimer = setInterval(async () => {
+    const resp = await fetch(`/status/${jobId}`);
+    const data = await resp.json();
+
+    updateChecklistFromMessage(data.message, sceneCount);
+
+    if (data.status === 'done') {
+      clearInterval(pollTimer);
+      markAllDone(sceneCount);
+      btn.disabled = false;
+      btn.textContent = 'Generate video';
+      resultArea.style.display = 'block';
+      resultArea.innerHTML = `
+        <video controls src="${data.video_url}"></video>
+        <a class="download-btn" href="${data.video_url}" download="safety-video.mp4">Download MP4</a>
+      `;
+    } else if (data.status === 'error') {
+      clearInterval(pollTimer);
+      showError(data.error);
+    }
+  }, 1500);
+}
+
+function updateChecklistFromMessage(message, sceneCount) {
+  if (!message) return;
+  const match = message.match(/scene (\d+) of/i);
+  document.querySelectorAll('.box.active').forEach(b => b.classList.remove('active'));
+
+  if (match) {
+    const idx = parseInt(match[1], 10) - 1;
+    for (let i = 0; i < idx; i++) markDone(i);
+    const el = document.getElementById(`scene-${idx}`);
+    if (el) {
+      el.querySelector('.box').classList.add('active');
+      el.querySelector('.log-line').classList.remove('dim');
+    }
+  } else if (/assembling/i.test(message)) {
+    for (let i = 0; i < sceneCount; i++) markDone(i);
+    const el = document.getElementById('scene-final');
+    if (el) {
+      el.querySelector('.box').classList.add('active');
+      el.querySelector('.log-line').classList.remove('dim');
+    }
+  }
+}
+
+function markDone(i) {
+  const el = document.getElementById(`scene-${i}`);
+  if (el) {
+    el.querySelector('.box').classList.remove('active');
+    el.querySelector('.box').classList.add('checked');
+    el.querySelector('.log-line').classList.remove('dim');
+  }
+}
+
+function markAllDone(sceneCount) {
+  for (let i = 0; i < sceneCount; i++) markDone(i);
+  const finalEl = document.getElementById('scene-final');
+  if (finalEl) {
+    finalEl.querySelector('.box').classList.remove('active');
+    finalEl.querySelector('.box').classList.add('checked');
+    finalEl.querySelector('.log-line').classList.remove('dim');
+  }
+}
+
+function showError(msg) {
+  clearInterval(pollTimer);
+  btn.disabled = false;
+  btn.textContent = 'Generate video';
+  errorArea.style.display = 'block';
+  errorArea.innerHTML = `<div class="error-box">GENERATION FAILED — ${escapeHtml(msg)}</div>`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
