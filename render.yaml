@@ -8,5 +8,7 @@ services:
     envVars:
       - key: PEXELS_API_KEY
         sync: false
+        - key: HF_TOKEN
+        sync: false   # free Hugging Face token, improves AI video generation quota
       - key: PYTHON_VERSION
         value: 3.11.0
